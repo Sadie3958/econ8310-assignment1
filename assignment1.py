@@ -1,21 +1,50 @@
-import numpy as np
+# assignment1.py attempt #10
+
 import pandas as pd
+import numpy as np
+from statsmodels.tsa.api import ExponentialSmoothing
 
-def forecast(y, h):
+# data
+train_url = "https://github.com/dustywhite7/econ8310-assignment1/raw/main/assignment_data_train.csv"
+test_url  = "https://github.com/dustywhite7/econ8310-assignment1/raw/main/assignment_data_test.csv"
 
-    # Convert to numpy array 
-    y = np.asarray(y, dtype=float)
+train = pd.read_csv(train_url)
+test  = pd.read_csv(test_url)
 
-    # Monthly seasonality 
-    season = 12
+# timestamps
+train["Timestamp"] = pd.to_datetime(train["Timestamp"])
+test["Timestamp"]  = pd.to_datetime(test["Timestamp"])
 
-    # If not enough data, fall back to last observation
-    if len(y) < season:
-        return np.repeat(y[-1], h)
+train = train.set_index("Timestamp")
+test  = test.set_index("Timestamp")
 
-    # Seasonal naive forecast
-    forecasts = []
-    for i in range(h):
-        forecasts.append(y[-season + (i % season)])
+# series
+y = train["trips"].astype(float)
+y = y.asfreq("h")
 
-    return np.array(forecasts)
+# time
+y = y.interpolate(method="time")
+
+# Model HOLT
+model = ExponentialSmoothing(
+    y,
+    trend="add",
+    seasonal="mul",
+    seasonal_periods=24,
+    damped_trend=True
+)
+
+fit = model.fit(
+    optimized=True,
+    use_brute=True
+)
+
+# Forecast
+pred = fit.forecast(len(test))
+
+# Match test index exactly
+pred = pd.Series(pred.values, index=test.index)
+
+# Guardrails
+pred = pred.clip(lower=0)
+pred = pred.fillna(method="ffill").fillna(method="bfill")
