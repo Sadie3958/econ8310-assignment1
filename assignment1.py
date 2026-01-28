@@ -1,4 +1,4 @@
-# assignment1.py
+# assignment1.py let's go!
 
 import pandas as pd
 from statsmodels.tsa.api import ExponentialSmoothing
@@ -17,22 +17,26 @@ train.set_index('Timestamp', inplace=True)
 test['Timestamp'] = pd.to_datetime(test['Timestamp'])
 test.set_index('Timestamp', inplace=True)
 
-# Target variable (hourly frequency)
+# Target variable
 y_train = train['trips'].asfreq('h')
 
-# model
+# Defining model
 model = ExponentialSmoothing(
     y_train,
     trend='add',
-    seasonal='add',
-    seasonal_periods=24
+    damped_trend=True,
+    seasonal='mul',
+    seasonal_periods=168   # weekly seasonality
 )
 
-modelFit = model.fit()
+modelFit = model.fit(optimized=True)
 
-# forecast
+# Forecast
 pred = modelFit.forecast(steps=len(test))
 pred = pd.Series(pred, index=test.index)
 
-# Prevent negative trip counts in case this matters
 pred = pred.clip(lower=0)
+
+print(pred.min())
+print(pred.mean())
+print(len(pred))
