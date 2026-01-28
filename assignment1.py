@@ -1,37 +1,21 @@
-import pandas as pd
 import numpy as np
-from statsmodels.tsa.api import ExponentialSmoothing
+import pandas as pd
 
-# data
-train = pd.read_csv("assignment_data_train.csv")
+def forecast(y, h):
 
-# Ensure proper datetime ordering
-train["Timestamp"] = pd.to_datetime(train["Timestamp"])
-train = train.sort_values("Timestamp")
+    # Convert to numpy array 
+    y = np.asarray(y, dtype=float)
 
-# Extract target series
-y = train["trips"].astype(float)
+    # Monthly seasonality 
+    season = 12
 
-# Holt model
-model = ExponentialSmoothing(
-    y,
-    trend="add",
-    seasonal="add",
-    seasonal_periods=24
-)
+    # If not enough data, fall back to last observation
+    if len(y) < season:
+        return np.repeat(y[-1], h)
 
-modelFit = model.fit(optimized=True)
+    # Seasonal naive forecast
+    forecasts = []
+    for i in range(h):
+        forecasts.append(y[-season + (i % season)])
 
-# test data load here
-test = pd.read_csv("assignment_data_test.csv")
-
-test["Timestamp"] = pd.to_datetime(test["Timestamp"])
-test = test.sort_values("Timestamp")
-
-n_forecast = len(test)
-
-# predict
-pred = modelFit.forecast(n_forecast)
-
-# Ensure numpy array output
-pred = np.array(pred)
+    return np.array(forecasts)
