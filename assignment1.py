@@ -1,42 +1,43 @@
-# assignment1.py let's go!
+# assignment1.py attempt #7
 
 import pandas as pd
-from statsmodels.tsa.api import ExponentialSmoothing
+import numpy as np
+from pygam import LinearGAM, s
 
-# getting data
+# Get data
 train_url = "https://github.com/dustywhite7/econ8310-assignment1/raw/main/assignment_data_train.csv"
 test_url  = "https://github.com/dustywhite7/econ8310-assignment1/raw/main/assignment_data_test.csv"
 
 train = pd.read_csv(train_url)
 test  = pd.read_csv(test_url)
 
-# time series
+# Preparing timestamps
 train['Timestamp'] = pd.to_datetime(train['Timestamp'])
-train.set_index('Timestamp', inplace=True)
-
 test['Timestamp'] = pd.to_datetime(test['Timestamp'])
-test.set_index('Timestamp', inplace=True)
 
-# Target variable
-y_train = train['trips'].asfreq('h')
+# Feature engineering (time-based)
+for df in [train, test]:
+    df['hour'] = df['hour']
+    df['dayofweek'] = df['Timestamp'].dt.dayofweek
+    df['time_idx'] = (df['Timestamp'] - train['Timestamp'].min()).dt.total_seconds() / 3600
 
-# Defining model
-model = ExponentialSmoothing(
-    y_train,
-    trend='add',
-    damped_trend=True,
-    seasonal='mul',
-    seasonal_periods=168   # weekly seasonality
+# Defining X and y variables
+X_train = train[['hour', 'dayofweek', 'time_idx']].values
+y_train = train['trips'].values
+
+X_test = test[['hour', 'dayofweek', 'time_idx']].values
+
+# GAM model
+model = LinearGAM(
+    s(0, n_splines=24) +        # hour of day
+    s(1, n_splines=7) +         # day of week
+    s(2, n_splines=40)          # long-run trend
 )
 
-modelFit = model.fit(optimized=True)
+modelFit = model.gridsearch(X_train, y_train)
 
 # Forecast
-pred = modelFit.forecast(steps=len(test))
-pred = pd.Series(pred, index=test.index)
+pred = modelFit.predict(X_test)
 
-pred = pred.clip(lower=0)
-
-print(pred.min())
-print(pred.mean())
-print(len(pred))
+# no negative trips
+pred = np.clip(pred, 0, None)
