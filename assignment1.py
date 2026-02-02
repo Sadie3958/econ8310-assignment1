@@ -2,46 +2,33 @@
 
 import pandas as pd
 import numpy as np
-from pygam import LinearGAM, s
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
-# -------------------------
-# Load data
-# -------------------------
+# Load training and test data
 train = pd.read_csv("assignment_data_train.csv")
 test = pd.read_csv("assignment_data_test.csv")
 
-# -------------------------
-# Select features and target
-# ONLY use hour, day, month
-# -------------------------
-X_train = train[["hour", "day", "month"]]
-y_train = train["trips"]
+# Prepare time series
+train["Timestamp"] = pd.to_datetime(train["Timestamp"])
+train = train.sort_values("Timestamp")
+train.set_index("Timestamp", inplace=True)
 
-X_test = test[["hour", "day", "month"]]
+# Hourly frequency
+y = train["trips"].asfreq("H")
 
-# -------------------------
-# Fit GAM
-# -------------------------
-# Smooth terms for each calendar feature
-gam = LinearGAM(
-    s(0, n_splines=10) +  # hour
-    s(1, n_splines=10) +  # day
-    s(2, n_splines=10)    # month
+# Define model 
+model = ExponentialSmoothing(
+    y,
+    trend="add",
+    seasonal="add",
+    seasonal_periods=24
 )
 
-gam.fit(X_train, y_train)
+# Fit model
+modelFit = model.fit(optimized=True)
 
-# -------------------------
-# Predict
-# -------------------------
-predictions = gam.predict(X_test)
+# Forecast January
+pred = modelFit.forecast(steps=len(test))
 
-# Ensure no negative trip predictions
-predictions = np.maximum(predictions, 0)
-
-# -------------------------
-# Output
-# -------------------------
-# The autograder expects ONLY predictions, one per line
-for p in predictions:
-    print(p)
+# Ensure numeric & non-negative
+pred = np.maximum(np.array(pred, dtype=float), 0)
