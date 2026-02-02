@@ -1,53 +1,47 @@
-# assignment1.py attemmp #10
+# assignment1.py
 
 import pandas as pd
 import numpy as np
-from statsmodels.tsa.api import ExponentialSmoothing
+from pygam import LinearGAM, s
 
+# -------------------------
 # Load data
-train_url = "https://github.com/dustywhite7/econ8310-assignment1/raw/main/assignment_data_train.csv"
-test_url  = "https://github.com/dustywhite7/econ8310-assignment1/raw/main/assignment_data_test.csv"
+# -------------------------
+train = pd.read_csv("assignment_data_train.csv")
+test = pd.read_csv("assignment_data_test.csv")
 
-train = pd.read_csv(train_url)
-test  = pd.read_csv(test_url)
+# -------------------------
+# Select features and target
+# ONLY use hour, day, month
+# -------------------------
+X_train = train[["hour", "day", "month"]]
+y_train = train["trips"]
 
-# Datetime handling
-train["Timestamp"] = pd.to_datetime(train["Timestamp"])
-test["Timestamp"]  = pd.to_datetime(test["Timestamp"])
+X_test = test[["hour", "day", "month"]]
 
-train = train.set_index("Timestamp")
-test  = test.set_index("Timestamp")
-
-# Target series (hourly)
-y = train["trips"].astype(float)
-y = y.asfreq("h")
-y = y.interpolate(method="time")
-
-# LOG TRANSFORM (critical)
-y_log = np.log1p(y)
-
-# Model: Holt-Winters (tuned)
-model = ExponentialSmoothing(
-    y_log,
-    trend=None,
-    seasonal="mul",
-    seasonal_periods=24
+# -------------------------
+# Fit GAM
+# -------------------------
+# Smooth terms for each calendar feature
+gam = LinearGAM(
+    s(0, n_splines=10) +  # hour
+    s(1, n_splines=10) +  # day
+    s(2, n_splines=10)    # month
 )
 
-modelFit = model.fit(
-    optimized=True,
-    use_brute=True
-)
+gam.fit(X_train, y_train)
 
-# Forecast
-pred_log = modelFit.forecast(len(test))
+# -------------------------
+# Predict
+# -------------------------
+predictions = gam.predict(X_test)
 
-# Back-transform
-pred = np.expm1(pred_log)
+# Ensure no negative trip predictions
+predictions = np.maximum(predictions, 0)
 
-# Match test index exactly
-pred = pd.Series(pred.values, index=test.index)
-
-# Safety
-pred = pred.clip(lower=0)
-pred = pred.fillna(method="ffill").fillna(method="bfill")
+# -------------------------
+# Output
+# -------------------------
+# The autograder expects ONLY predictions, one per line
+for p in predictions:
+    print(p)
