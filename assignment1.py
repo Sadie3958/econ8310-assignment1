@@ -1,31 +1,43 @@
+# Required imports
 import pandas as pd
 import numpy as np
-from pygam import LinearGAM, s, f
+from prophet import Prophet
 
-train = pd.read_csv("assignment_data_train.csv")
+df = pd.read_csv('your_data.csv')  
 
-# Target
-y = train["trips"].values
+# Convert to correct types
+df['ds'] = pd.to_datetime(df['ds'])
+df['y'] = df['y'].astype(float)
 
-# Features: hour of day, day of week, trend
-X = pd.DataFrame({
-    "hour": train.index % 24,                     # hourly seasonality
-    "day_of_week": (train.index // 24) % 7,      # weekly seasonality
-    "trend": np.arange(len(train))               # overall trend
-})
+train_df = df.iloc[:-30]
+test_df = df.iloc[-30:]
 
-model = LinearGAM(
-    s(0, n_splines=24, spline_order=3) +   # hour
-    f(1) +                                 # day of week as factor
-    s(2, n_splines=50)                     # trend
-).fit(X.values, y)
+model = Prophet(
+    daily_seasonality=False,      # turn off if daily data is noisy
+    weekly_seasonality=True,      # captures weekly trends
+    yearly_seasonality=True       # captures yearly seasonality
+)
 
-modelFit = model  # autograder expects modelFit
+# Add US holidays to improve accuracy
+model.add_country_holidays(country_name='US')
 
-X_pred = pd.DataFrame({
-    "hour": np.arange(len(train), len(train)+744) % 24,
-    "day_of_week": (np.arange(len(train), len(train)+744)//24) % 7,
-    "trend": np.arange(len(train), len(train)+744)
-})
+# Fit the model
+model.fit(train_df)
 
-pred = modelFit.predict(X_pred.values)
+future = model.make_future_dataframe(periods=len(test_df), freq='D')
+forecast = model.predict(future)
+
+y_pred = forecast['yhat'][-len(test_df):].values
+y_true = test_df['y'].values
+
+rmse = np.sqrt(np.mean((y_true - y_pred)**2))
+print(f'RMSE: {rmse}')
+
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(10,5))
+plt.plot(df['ds'], df['y'], label='Actual')
+plt.plot(forecast['ds'], forecast['yhat'], label='Forecast')
+plt.axvline(x=train_df['ds'].iloc[-1], color='r', linestyle='--', label='Train/Test split')
+plt.legend()
+plt.show()
