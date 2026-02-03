@@ -1,32 +1,33 @@
 import pandas as pd
 import numpy as np
-import statsmodels.api as sm
+from pygam import LinearGAM, s, f
 
-df = pd.read_csv('data.csv')  # replace with your actual filename
-df['ds'] = pd.to_datetime(df['ds'])
-df['y'] = df['y'].astype(float)
+# 1. Load the training data
+train_url = "https://github.com/dustywhite7/econ8310-assignment1/raw/main/assignment_data_train.csv"
+df_train = pd.read_csv(train_url)
 
-# Linear trend
-df['t'] = np.arange(len(df))
+# 2. Preprocess data
+df_train['Timestamp'] = pd.to_datetime(df_train['Timestamp'])
+df_train['day_of_week'] = df_train['Timestamp'].dt.dayofweek
 
-# Weekly seasonality
-df['dow'] = df['ds'].dt.dayofweek  # 0=Mon, 6=Sun
-dow_dummies = pd.get_dummies(df['dow'], prefix='dow', drop_first=True)
+X_train = df_train[['hour', 'day_of_week']]
+y_train = df_train['trips']
 
-# Combine features
-X = pd.concat([df[['t']], dow_dummies], axis=1)
-X = sm.add_constant(X)  # add intercept
+# 3. Build and Fit the Model
+model = LinearGAM(s(0, n_splines=24) + f(1))
+modelFit = model.gridsearch(X_train.values, y_train.values)
 
-train_X = X.iloc[:-30]
-train_y = df['y'].iloc[:-30]
-test_X = X.iloc[-30:]
-test_y = df['y'].iloc[-30:]
+# 4. Load the test data and generate predictions
+test_url = "https://github.com/dustywhite7/econ8310-assignment1/raw/main/assignment_data_test.csv"
+df_test = pd.read_csv(test_url)
 
-model = sm.OLS(train_y, train_X).fit()
+# Preprocess test data the same way as training data
+df_test['Timestamp'] = pd.to_datetime(df_test['Timestamp'])
+df_test['day_of_week'] = df_test['Timestamp'].dt.dayofweek
+X_test = df_test[['hour', 'day_of_week']]
 
-y_pred = model.predict(test_X)
+# Generate the 'pred' vector (744 hours for January)
+pred = modelFit.predict(X_test.values)
 
-rmse = np.sqrt(np.mean((test_y - y_pred)**2))
-print(f'RMSE: {rmse}')
-
-forecast = y_pred.values
+# Ensure pred is a numpy array or list as expected by the autograder
+pred = np.array(pred)
